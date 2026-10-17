@@ -1,0 +1,19 @@
+{
+  "name": "leaseir-bot-comerciales",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bot de Telegram para que cada comercial de Leaseir gestione sus deals y tareas de Pipedrive",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.60.0",
+    "@neondatabase/serverless": "^1.0.0",
+    "@vercel/functions": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}
