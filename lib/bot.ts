@@ -67,14 +67,14 @@ export async function handleUpdate(update: any): Promise<void> {
   // ---------- Grupo ----------
   const mentioned = text.toLowerCase().includes(`@${botName.toLowerCase()}`);
   const replyToBot = msg.reply_to_message?.from?.username === botName;
-  // Lo que escribe el admin en el grupo se ignora salvo que llame al bot
-  if (admin && !mentioned && !replyToBot) return;
-
   const binding = await db.getChat(chatId);
   if (!binding) {
-    if (mentioned || admin) await send(chatId, 'Este grupo no está vinculado a ningún comercial. Nacho: /vincular <nombre en Pipedrive>');
+    if (mentioned || replyToBot) await send(chatId, 'Este grupo no está vinculado a ningún comercial. Nacho: /vincular <nombre en Pipedrive>');
     return;
   }
+  // Lo que escribe el admin se ignora salvo que llame al bot, una vez que el comercial ya ha escrito en el grupo.
+  // Mientras no haya comercial (pruebas del admin solo), el bot le responde siempre.
+  if (admin && binding.comercial_tg_id !== null && !mentioned && !replyToBot) return;
   if (!admin) await db.setComercial(chatId, from.id);
 
   const clean = text.replace(new RegExp(`@${botName}`, 'ig'), '').trim();
