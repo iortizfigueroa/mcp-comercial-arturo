@@ -2,7 +2,7 @@
 import { ensureSchema, listChats } from '../../lib/db.js';
 import { env } from '../../lib/env.js';
 import { buildSummary } from '../../lib/summary.js';
-import { send } from '../../lib/telegram.js';
+import { sendRich } from '../../lib/telegram.js';
 
 export async function GET(req: Request): Promise<Response> {
   if (req.headers.get('authorization') !== `Bearer ${env('CRON_SECRET')}`) {
@@ -12,7 +12,7 @@ export async function GET(req: Request): Promise<Response> {
   const results: { chat: number; ok: boolean; error?: string }[] = [];
   for (const chat of await listChats()) {
     try {
-      await send(chat.chat_id, await buildSummary(chat));
+      await sendRich(chat.chat_id, await buildSummary(chat));
       results.push({ chat: chat.chat_id, ok: true });
     } catch (e) {
       console.error('resumen', chat.chat_id, e);

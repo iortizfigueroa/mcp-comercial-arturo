@@ -28,6 +28,40 @@ export async function send(chatId: number, text: string, extra: Record<string, u
   return last;
 }
 
+const escapeHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Texto con enlaces estilo [texto](https://...) -> HTML de Telegram. Lo demás se escapa. */
+export function toHtml(text: string): string {
+  return escapeHtml(text).replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, label: string, url: string) =>
+    `<a href="${url.replace(/"/g, '&quot;')}">${label}</a>`,
+  );
+}
+
+/** Envía texto con enlaces clicables. Trocea por líneas; si Telegram rechaza el HTML, lo manda en texto plano. */
+export async function sendRich(chatId: number, text: string, extra: Record<string, unknown> = {}): Promise<any> {
+  const lines = (text.trim() || '(sin texto)').split('\n');
+  const chunks: string[] = [];
+  let cur = '';
+  for (const line of lines) {
+    if (cur && (cur + '\n' + line).length > 3500) { chunks.push(cur); cur = line; }
+    else cur = cur ? `${cur}\n${line}` : line;
+  }
+  if (cur) chunks.push(cur);
+  let last: any;
+  for (let i = 0; i < chunks.length; i++) {
+    const ex = i === chunks.length - 1 ? extra : {};
+    try {
+      last = await tg('sendMessage', {
+        chat_id: chatId, text: toHtml(chunks[i]), parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true }, ...ex,
+      });
+    } catch {
+      last = await tg('sendMessage', { chat_id: chatId, text: chunks[i], link_preview_options: { is_disabled: true }, ...ex });
+    }
+  }
+  return last;
+}
+
 export async function typing(chatId: number): Promise<void> {
   await tg('sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => undefined);
 }

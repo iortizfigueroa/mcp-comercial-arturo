@@ -22,7 +22,8 @@ export async function buildSummary(chat: ChatBinding): Promise<string> {
   const mine = openActs.filter((a) => pd.ownerId(a) === uid);
   const withDate = mine.map((a) => ({ a, l: utcToMadrid(a.due_date, a.due_time) }));
   const label = ({ a, l }: { a: any; l: { date: string; time: string | null } }, showDate: boolean) =>
-    `${showDate ? `${l.date} ` : ''}${l.time ? `${l.time} ` : ''}${a.subject}${a.deal_title ? ` · ${a.deal_title}` : ''}`;
+    `${showDate ? `${l.date} ` : ''}${l.time ? `${l.time} ` : ''}${a.subject}` +
+    (a.deal_title ? ` · ${a.deal_title}${a.deal_id ? ` ([link](${pd.dealUrl(a.deal_id)}))` : ''}` : '');
 
   const vencidas = withDate.filter((x) => x.l.date && x.l.date < today).sort((x, y) => x.l.date.localeCompare(y.l.date));
   const hoyPend = withDate.filter((x) => x.l.date === today);
@@ -54,7 +55,7 @@ export async function buildSummary(chat: ChatBinding): Promise<string> {
   if (manana.length) out.push(list(manana.map((x) => label(x, false))));
 
   out.push(`\n🧊 Deals abiertos sin próxima tarea: ${sinTarea.length} de ${openDeals.length}`);
-  if (sinTarea.length) out.push(list(sinTarea.map((d) => d.title)));
+  if (sinTarea.length) out.push(list(sinTarea.map((d) => `${d.title} ([link](${pd.dealUrl(d.id)}))`)));
 
   return out.join('\n');
 }

@@ -4,7 +4,7 @@ import * as db from './db.js';
 import { isAdmin, privateEnabled } from './env.js';
 import * as pd from './pipedrive.js';
 import { buildSummary } from './summary.js';
-import { getBotUsername, send, tg, typing } from './telegram.js';
+import { getBotUsername, send, sendRich, tg, typing } from './telegram.js';
 import { executeWrite, type Ctx } from './tools.js';
 
 const HELP = `Soy el asistente de Pipedrive. Escríbeme normal, por ejemplo:
@@ -96,7 +96,7 @@ async function converse(chatId: number, binding: db.ChatBinding, tgUserId: numbe
     const memo = proposals.length ? `\n[Propuesto para confirmar: ${proposals.map((p) => p.summary.split('\n')[0]).join(' | ')}]` : '';
     await db.addMessage(ctx.chatId, 'assistant', (reply || '(sin texto)') + memo);
 
-    if (reply) await send(chatId, reply);
+    if (reply) await sendRich(chatId, reply);
     for (const p of proposals) {
       await send(chatId, `¿Confirmo?\n${p.summary}`, {
         reply_markup: {
@@ -214,7 +214,7 @@ async function handleCommand(
       const binding = c.isGroup ? await db.getChat(c.chatId) : await db.getChatByComercial(c.fromId);
       if (!binding) return void (await send(c.chatId, 'Este chat no está vinculado.'));
       await typing(c.chatId);
-      await send(c.chatId, await buildSummary(binding));
+      await sendRich(c.chatId, await buildSummary(binding));
       return;
     }
 

@@ -28,6 +28,7 @@ function compactDeal(d: any, stageName: (id: number) => string) {
   return {
     id: d.id,
     titulo: d.title,
+    link: pd.dealUrl(d.id),
     organizacion: d.org_name ?? d.org_id?.name ?? d.organization?.name ?? undefined,
     contacto: d.person_name ?? d.person_id?.name ?? d.person?.name ?? undefined,
     etapa: stageName(d.stage_id ?? d.stage?.id),
@@ -52,6 +53,7 @@ function compactActivity(a: any, today = todayMadrid()) {
     vencida: !a.done && !!l.date && l.date < today ? true : undefined,
     deal: a.deal_title ?? undefined,
     deal_id: a.deal_id ?? undefined,
+    deal_link: a.deal_id ? pd.dealUrl(a.deal_id) : undefined,
     organizacion: a.org_name ?? undefined,
   };
 }

@@ -41,6 +41,8 @@ export function ownerId(x: any): number | undefined {
   return u == null ? undefined : Number(u);
 }
 
+export const dealUrl = (id: number | string) => `https://${env('PIPEDRIVE_DOMAIN')}/deal/${id}`;
+
 // ---------- Usuarios ----------
 export async function listUsers(): Promise<any[]> {
   return (await pd('GET', '/users')).data ?? [];
