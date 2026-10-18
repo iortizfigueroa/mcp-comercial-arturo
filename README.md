@@ -5,7 +5,7 @@ Cada comercial tiene un grupo de Telegram con Nacho y el bot. El comercial escri
 y el bot consulta o prepara el cambio en Pipedrive. **Todo cambio se confirma con un botón ✅/❌.**
 
 - Solo ve y toca los deals y tareas del comercial vinculado al grupo (filtrado en el servidor).
-- Lo que escribe Nacho en el grupo se ignora salvo que mencione al bot (@bot) o le responda.
+- El bot lee y responde a todo lo que se escribe en el grupo, también lo de Nacho, siempre sobre los deals del comercial vinculado.
 - El comercial puede usarlo en el grupo y también en privado (`PRIVATE_CHAT_ENABLED=true`). Para que le reconozca en privado, tiene que haber escrito antes una vez en el grupo. Lo que haga en privado queda igual en el registro y en el resumen diario del grupo.
 - Registro: cada mensaje y cada cambio (hecho, cancelado o fallido) queda en Postgres.
 - Resumen diario L-V a las 19:00 en cada grupo: uso del bot, cambios hechos, tareas vencidas, de mañana y deals sin próxima tarea. También a demanda con `/resumen`.

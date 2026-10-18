@@ -72,14 +72,14 @@ export async function handleUpdate(update: any): Promise<void> {
     if (mentioned || replyToBot) await send(chatId, 'Este grupo no está vinculado a ningún comercial. Nacho: /vincular <nombre en Pipedrive>');
     return;
   }
-  // Lo que escribe el admin se ignora salvo que llame al bot, una vez que el comercial ya ha escrito en el grupo.
-  // Mientras no haya comercial (pruebas del admin solo), el bot le responde siempre.
-  if (admin && binding.comercial_tg_id !== null && !mentioned && !replyToBot) return;
+  // El bot lee y responde a todo lo que se escribe en el grupo, sea del comercial o del admin
   if (!admin) await db.setComercial(chatId, from.id);
 
   const clean = text.replace(new RegExp(`@${botName}`, 'ig'), '').trim();
   if (!clean) return;
-  return converse(chatId, binding, from.id, clean);
+  // En el grupo puede escribir más de una persona: indicamos quién habla
+  const who = [from.first_name, from.last_name].filter(Boolean).join(' ') || 'Usuario';
+  return converse(chatId, binding, from.id, `${who}${admin ? ' (Nacho, responsable)' : ''}: ${clean}`);
 }
 
 async function converse(chatId: number, binding: db.ChatBinding, tgUserId: number, text: string): Promise<void> {
