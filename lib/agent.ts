@@ -5,7 +5,9 @@ import * as pd from './pipedrive.js';
 import { nowMadridText, todayMadrid } from './time.js';
 import { buildTools, isWriteTool, proposeWrite, runRead, type Ctx } from './tools.js';
 
-const client = new Anthropic(); // lee ANTHROPIC_API_KEY
+// Lee ANTHROPIC_API_KEY. Si la clave no está ligada a un workspace, hay que indicarlo con ANTHROPIC_WORKSPACE_ID
+const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+const client = new Anthropic(workspaceId ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } } : {});
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
 export interface Proposal {
