@@ -31,96 +31,96 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
   return out;
 }
 
-/** Recoge los datos de Pipedrive del comercial en un formato compacto para Claude. */
+// Embudo y etapas del resumen (leaseir.pipedrive.com)
+const PIPELINE_SINGLE_LEADS = 5;
+const STAGE_GANADO = 46;
+const STAGES_NEVERA = new Set([41, 45]); // 41 Nevera no interesado, 45 Nevera cualificados
+
+/** Recoge los deals del comercial en Single Leads (solo lectura) en un formato compacto para Claude. */
 async function collect(uid: number) {
   const today = todayMadrid();
-  const [deals, acts, { stages, pipelines }] = await Promise.all([
+  const [deals, acts, { stages }] = await Promise.all([
     pd.listDeals(uid, 'open'),
     pd.listActivities(uid, { done: 0 }),
     pd.stagesAndPipelines(),
   ]);
-  const mine = deals.filter((d) => pd.ownerId(d) === uid);
-  const stageById = new Map<number, any>(stages.map((s: any) => [s.id, s]));
-  const pipeName = new Map<number, string>(pipelines.map((p: any) => [p.id, p.name]));
+  const stageName = new Map<number, string>(stages.map((s: any) => [s.id, s.name]));
+  const enSingle = deals.filter((d) => pd.ownerId(d) === uid && Number(d.pipeline_id) === PIPELINE_SINGLE_LEADS);
+  const vivos = enSingle.filter((d) => d.stage_id !== STAGE_GANADO && !STAGES_NEVERA.has(d.stage_id));
+  const nevera = enSingle.filter((d) => STAGES_NEVERA.has(d.stage_id));
 
   const actsByDeal = new Map<number, any[]>();
-  const sueltas: any[] = [];
-  for (const a of acts.filter((a) => pd.ownerId(a) === uid)) {
+  for (const a of acts.filter((a) => pd.ownerId(a) === uid && a.deal_id)) {
     const l = utcToMadrid(a.due_date, a.due_time);
-    const t = { asunto: a.subject, tipo: a.type, fecha: l.date || undefined, hora: l.time ?? undefined, vencida: !!l.date && l.date < today };
-    if (a.deal_id) actsByDeal.set(a.deal_id, [...(actsByDeal.get(a.deal_id) ?? []), t]);
-    else sueltas.push(t);
+    const t = {
+      asunto: a.subject,
+      tipo: a.type,
+      fecha: l.date || undefined,
+      hora: l.time ?? undefined,
+      estado: !l.date ? 'sin fecha' : l.date < today ? 'vencida' : l.date === today ? 'hoy' : 'próxima',
+    };
+    actsByDeal.set(a.deal_id, [...(actsByDeal.get(a.deal_id) ?? []), t]);
   }
 
-  const leads = await pool(mine, 5, async (d) => {
-    const st = stageById.get(d.stage_id);
-    const notes = await pd.dealNotes(d.id, 3).catch(() => []);
+  const notas = async (id: number, n: number) =>
+    (await pd.dealNotes(id, n).catch(() => [])).map((x: any) => ({ fecha: day(x.add_time), texto: clean(x.content, 500) }));
+
+  const leads = await pool(vivos, 5, async (d) => {
+    const ns = await notas(d.id, 3);
     return {
       nombre: d.title,
       link: pd.dealUrl(d.id),
-      organizacion: d.org_name ?? d.org_id?.name ?? undefined,
-      embudo: pipeName.get(st?.pipeline_id ?? d.pipeline_id) ?? undefined,
-      etapa: st?.name,
-      valor: d.value ? `${d.value} ${d.currency ?? ''}`.trim() : undefined,
-      etiquetas: d.label ?? undefined,
-      creado: day(d.add_time),
-      etapa_desde: day(d.stage_change_time),
-      ultima_actividad_hecha: day(d.last_activity_date),
-      ultimo_email_recibido: day(d.last_incoming_mail_time),
-      ultimo_email_enviado: day(d.last_outgoing_mail_time),
-      tareas_pendientes: actsByDeal.get(d.id) ?? [],
-      ultimas_notas: notes.map((n: any) => ({ fecha: day(n.add_time), texto: clean(n.content) })),
+      etapa: stageName.get(d.stage_id) ?? `etapa ${d.stage_id}`,
+      alta: day(d.add_time),
+      ultima_nota: ns[0] ?? null,
+      notas_anteriores: ns.slice(1),
+      actividades_abiertas: actsByDeal.get(d.id) ?? [],
     };
   });
 
-  return { hoy: today, ayer: addDays(today, -1), leads, tareas_sin_deal: sueltas };
+  const neveraInfo = await pool(nevera, 5, async (d) => ({
+    nombre: d.title,
+    link: pd.dealUrl(d.id),
+    etapa: stageName.get(d.stage_id) ?? `etapa ${d.stage_id}`,
+    ultimas_notas: await notas(d.id, 2),
+  }));
+
+  return { hoy: today, ayer: addDays(today, -1), leads_vivos: leads, en_nevera: neveraInfo };
 }
-
-const STYLE = `Ejemplo de estilo (datos inventados; copia el TONO y la ESTRUCTURA, nunca estos nombres):
-
-Pablo, tienes 12 leads vivos en Single Leads: 3 calientes y 6 parados. No cuento a Marta Gil, que lleva Lourdes, ni los 2 que tienes en la nevera.
-
-**Recién entrados (1)**
-• Clínica Aurora ([link](https://x/deal/1)) tiene dos centros en Sevilla. Le escribiste por email y por WhatsApp y no ha contestado. La tarea de insistirle venció el 19/10.
-
-**Calientes (3)**
-• Laura Pérez ([link](https://x/deal/2)) aceptó el alquiler y quiere arrancar antes de diciembre. La llamada sigue pendiente desde el 15/10 y es lo más urgente.
-• Estética Mar ([link](https://x/deal/3)) tiene la propuesta desde agosto y la compara con otro diodo. El seguimiento venció el 19/10.
-
-**Esperan a una fecha (1)**
-• Centro Nube ([link](https://x/deal/4)) retoma el proyecto en enero, y tienes tarea el 12/01.
-
-**Parados (6)**
-• Ana Ruiz ([link](https://x/deal/5)) no contesta desde el 9/10.
-• Centro Uno ([link](https://x/deal/6)), Velvet ([link](https://x/deal/7)) y Lúa ([link](https://x/deal/8)) tienen el seguimiento vencido desde julio.
-
-**En la nevera sin motivo (1)**
-• Spa Norte ([link](https://x/deal/9)) no tiene el motivo apuntado.
-
-Tienes las notas al día, pero se te acumulan tareas vencidas. Lo que puede cerrarse pronto son Laura y Estética Mar, y Laura va primero. Si me dices qué pasó con cada uno, lo actualizo en Pipedrive o paso a la nevera los parados.`;
 
 export async function buildSummary(chat: ChatBinding): Promise<string> {
   const data = await collect(chat.pipedrive_user_id);
   const nombre = chat.pipedrive_user_name.split(/\s+/)[0];
-  if (data.leads.length === 0 && data.tareas_sin_deal.length === 0) {
-    return `${nombre}, no tienes deals abiertos ni tareas pendientes en Pipedrive.`;
+  if (data.leads_vivos.length === 0 && data.en_nevera.length === 0) {
+    return `${nombre}, no tienes deals abiertos en Single Leads.`;
   }
 
-  const system = `Escribes el resumen diario de Pipedrive para ${nombre}, comercial de Leaseir (equipos de depilación láser de diodo y radiofrecuencia para clínicas estéticas). Lo lee en Telegram a primera hora.
+  const system = `Escribes el resumen diario de leads de ${nombre}, comercial de Leaseir (equipos de depilación láser de diodo y radiofrecuencia para clínicas estéticas), a partir de su embudo "Single Leads" de Pipedrive. Lo lee en Telegram a primera hora. Es solo lectura: no propones haber cambiado nada.
 Hoy es ${nowMadridText()} (hoy ${data.hoy}, ayer ${data.ayer}).
 
-Cómo escribirlo:
-- Empieza con una frase: cuántos leads vivos tiene (por embudo si hay varios), cuántos calientes y cuántos parados, y a quién no cuentas y por qué (los que en las notas lleva otra persona, los que están en la nevera).
-- Agrupa en secciones con el título en negrita y el número entre paréntesis: Recién entrados, Calientes, Esperan a una fecha, Parados, En la nevera sin motivo. Omite las secciones vacías. Puedes añadir otra si hace falta de verdad.
-- Clasifica leyendo las notas, las tareas y las fechas: caliente = hay interés real y siguiente paso claro; parado = sin respuesta o con seguimiento vencido hace tiempo; "esperan a una fecha" = el cliente ha puesto un plazo. "Nevera" = etapa o etiqueta de nevera/congelado/en pausa.
-- Una línea por lead que empieza por "• ", con el nombre seguido de ([link](URL)) usando su link, y en una o dos frases lo que importa: quién es, en qué punto está y qué tarea vencida o próxima tiene. Si varios parados están igual, júntalos en una línea.
-- Si una tarea ya no encaja con lo que dicen las notas, dilo.
-- Fechas en formato 19/10; usa "ayer", "hoy" o "mañana" cuando toque.
-- Cierra con un párrafo corto: cómo lleva las notas y las tareas, qué puede cerrarse pronto y qué va primero, y ofrece actualizar Pipedrive o pasar a la nevera los parados.
-- Tutea, frases naturales, sin relleno. Sin tablas ni otros formatos: solo **negrita** en los títulos de sección, "• " y los [link](URL).
-- No inventes nada que no esté en los datos.
+Datos que recibes:
+- leads_vivos: deals abiertos de ${nombre} en Single Leads (sin ganados ni nevera), con etapa, fecha de alta, última nota, notas anteriores y actividades abiertas (vencidas, de hoy y próximas).
+- en_nevera: deals en las etapas de nevera, solo para detectar los que no tienen motivo.
 
-${STYLE}`;
+Antes de contar: excluye de leads_vivos los que según las notas se han derivado a un distribuidor. No los cuentes ni los menciones como leads vivos.
+
+Clasificación:
+- Recién entrados: dados de alta en los últimos días.
+- Calientes: interés claro (propuesta, precio, demo, quiere comprar o alquilar pronto).
+- Esperan a una fecha: el lead ha dado un plazo (abre en enero, espera licencia…) y la tarea está puesta.
+- En marcha (opcional): avanzan con su siguiente paso al día.
+- Parados: sin respuesta o con tareas vencidas hace tiempo. Enseña entre 6 y 8 y cuenta el resto ("y X más").
+- Nevera sin motivo: de en_nevera, los que no tienen ninguna nota que explique por qué están ahí.
+- Si se envió dossier o precio y no hay respuesta: pide seguimiento, NUNCA sugieras mandarlo a la nevera.
+
+Formato:
+- En español, tuteando, frases naturales y sin relleno.
+- Empieza con una frase con el total de leads vivos y cuántos calientes y cuántos parados hay.
+- Secciones con el título en negrita y el número entre paréntesis (por ejemplo **Calientes (4)**). Omite las vacías.
+- Cada lead en una línea que empieza por "• ": Nombre ([link](URL)) usando su link, y 1-2 frases: qué quiere, qué se hizo y la siguiente acción con fecha (formato 19/10; "ayer", "hoy" o "mañana" cuando toque). Si la tarea ya no encaja con la última nota, dilo.
+- Cierra con una lectura general de 1-2 frases y las prioridades.
+- Sin tablas ni otros formatos: solo **negrita** en los títulos, "• " y los [link](URL).
+- No inventes nada que no esté en los datos.`;
 
   // Los modelos nuevos piensan siempre (adaptive thinking) y el pensamiento cuenta dentro de max_tokens.
   // effort 'low' reduce cuánto piensa; max_tokens con margen para que siempre quede sitio para el texto.
@@ -138,7 +138,7 @@ ${STYLE}`;
     .trim();
   if (!text) {
     const tipos = res.content.map((b) => b.type).join(',') || 'nada';
-    console.error('resumen vacío', { stop_reason: res.stop_reason, tipos, usage: res.usage, leads: data.leads.length });
+    console.error('resumen vacío', { stop_reason: res.stop_reason, tipos, usage: res.usage, leads: data.leads_vivos.length });
     return `${nombre}, no he podido generar el resumen de hoy (motivo: ${res.stop_reason}; bloques: ${tipos}).`;
   }
   return text;
