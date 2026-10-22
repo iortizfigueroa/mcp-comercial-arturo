@@ -1,9 +1,10 @@
 {
   "regions": ["lhr1"],
   "functions": {
-    "api/**/*.ts": { "maxDuration": 60 }
+    "api/**/*.ts": { "maxDuration": 300 }
   },
   "crons": [
-    { "path": "/api/cron/resumen", "schedule": "0 18 * * 1-5" }
+    { "path": "/api/cron/resumen", "schedule": "30 7 * * *" },
+    { "path": "/api/cron/resumen", "schedule": "30 8 * * *" }
   ]
 }

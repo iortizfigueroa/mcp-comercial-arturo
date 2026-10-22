@@ -8,7 +8,7 @@ y el bot consulta o prepara el cambio en Pipedrive. **Todo cambio se confirma co
 - El bot lee y responde a todo lo que se escribe en el grupo, también lo de Nacho, siempre sobre los deals del comercial vinculado.
 - El comercial puede usarlo en el grupo y también en privado (`PRIVATE_CHAT_ENABLED=true`). Para que le reconozca en privado, tiene que haber escrito antes una vez en el grupo. Lo que haga en privado queda igual en el registro y en el resumen diario del grupo.
 - Registro: cada mensaje y cada cambio (hecho, cancelado o fallido) queda en Postgres.
-- Resumen diario L-V a las 19:00 en cada grupo: uso del bot, cambios hechos, tareas vencidas, de mañana y deals sin próxima tarea. También a demanda con `/resumen`.
+- Resumen diario a las 9:30 (hora de Madrid), todos los días, en cada grupo: Claude lee los deals abiertos, tareas y notas del comercial y escribe un resumen por grupos (recién entrados, calientes, esperan fecha, parados, nevera) con enlace a cada deal. También a demanda con `/resumen`.
 
 ## Puesta en marcha
 
@@ -60,7 +60,7 @@ Escríbele al bot en privado `/miid`. Pon ese número en `ADMIN_TELEGRAM_IDS` y 
 - `/vincular <nombre>` y `/desvincular` – solo admin, dentro del grupo
 
 ## Horario del resumen
-El cron va en UTC: `0 18 * * 1-5` = 19:00 en Madrid en horario de invierno (20:00 en verano). Se cambia en `vercel.json`.
+Vercel programa en UTC: el cron se lanza a las 7:30 y 8:30 UTC y solo envía la ejecución que cae a las 9 en Madrid, así vale en verano e invierno. Un resumen por grupo y día (tabla `summary_sent`).
 
 ## Chat privado
 Con `PRIVATE_CHAT_ENABLED=true` el comercial abre el bot en privado y funciona igual. Se le reconoce por su ID de Telegram, que el bot guarda la primera vez que escribe en el grupo. Para desactivarlo: `false` y redeploy.

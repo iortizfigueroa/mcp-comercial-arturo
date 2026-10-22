@@ -55,6 +55,12 @@ export async function ensureSchema(): Promise<void> {
     detail TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
+  // Un resumen diario por grupo y día
+  await q`CREATE TABLE IF NOT EXISTS summary_sent (
+    chat_id BIGINT NOT NULL,
+    day DATE NOT NULL,
+    PRIMARY KEY (chat_id, day)
+  )`;
   // Para no procesar dos veces el mismo update si Telegram reintenta
   await q`CREATE TABLE IF NOT EXISTS processed_updates (
     update_id BIGINT PRIMARY KEY,
@@ -178,4 +184,15 @@ export async function userMessagesForDay(chatId: number, day: string): Promise<n
   const rows = await q`SELECT COUNT(*)::int AS n FROM messages
     WHERE chat_id = ${chatId} AND role = 'user' AND (created_at AT TIME ZONE 'Europe/Madrid')::date = ${day}::date`;
   return Number(rows[0]?.n ?? 0);
+}
+
+/** Marca el resumen de hoy como enviado. Devuelve false si ya se había enviado. */
+export async function claimSummary(chatId: number, day: string): Promise<boolean> {
+  const rows = await q`INSERT INTO summary_sent (chat_id, day) VALUES (${chatId}, ${day}::date)
+    ON CONFLICT DO NOTHING RETURNING chat_id`;
+  return rows.length > 0;
+}
+
+export async function releaseSummary(chatId: number, day: string): Promise<void> {
+  await q`DELETE FROM summary_sent WHERE chat_id = ${chatId} AND day = ${day}::date`;
 }

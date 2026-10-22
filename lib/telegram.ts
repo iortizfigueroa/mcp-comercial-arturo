@@ -30,11 +30,11 @@ export async function send(chatId: number, text: string, extra: Record<string, u
 
 const escapeHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Texto con enlaces estilo [texto](https://...) -> HTML de Telegram. Lo demás se escapa. */
+/** Texto con enlaces [texto](https://...) y **negrita** -> HTML de Telegram. Lo demás se escapa. */
 export function toHtml(text: string): string {
   return escapeHtml(text).replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, label: string, url: string) =>
     `<a href="${url.replace(/"/g, '&quot;')}">${label}</a>`,
-  );
+  ).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
 }
 
 /** Envía texto con enlaces clicables. Trocea por líneas; si Telegram rechaza el HTML, lo manda en texto plano. */

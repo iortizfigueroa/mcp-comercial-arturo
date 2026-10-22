@@ -200,7 +200,7 @@ async function handleCommand(
       }
       const u = hits[0];
       await db.bindChat(c.chatId, u.id, u.name);
-      await send(c.chatId, `✅ Grupo vinculado a ${u.name} (${u.email}).\nDesde ahora todo lo que escriba el comercial aquí va contra sus deals y tareas. Resumen diario a las 19:00 (L-V).`);
+      await send(c.chatId, `✅ Grupo vinculado a ${u.name} (${u.email}).\nDesde ahora todo lo que escriba el comercial aquí va contra sus deals y tareas. Resumen diario a las 9:30, todos los días.`);
       return;
     }
 
