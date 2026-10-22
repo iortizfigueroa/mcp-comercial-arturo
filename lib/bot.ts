@@ -213,8 +213,14 @@ async function handleCommand(
     case 'resumen': {
       const binding = c.isGroup ? await db.getChat(c.chatId) : await db.getChatByComercial(c.fromId);
       if (!binding) return void (await send(c.chatId, 'Este chat no está vinculado.'));
+      await send(c.chatId, '⏳ Preparando el resumen, tardo unos segundos…');
       await typing(c.chatId);
-      await sendRich(c.chatId, await buildSummary(binding));
+      try {
+        await sendRich(c.chatId, await buildSummary(binding));
+      } catch (e) {
+        console.error('resumen', e);
+        await send(c.chatId, `⚠️ No he podido hacer el resumen: ${(e as Error).message}`);
+      }
       return;
     }
 

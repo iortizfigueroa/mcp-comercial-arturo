@@ -121,12 +121,21 @@ Cómo escribirlo:
 
 ${STYLE}`;
 
-  const res = await claude.messages.create({
+  const params = {
     model: MODEL,
-    max_tokens: 16000,
+    max_tokens: 8000,
     system,
-    messages: [{ role: 'user', content: `Datos de Pipedrive de ${nombre}:\n${JSON.stringify(data)}` }],
-  });
+    messages: [{ role: 'user' as const, content: `Datos de Pipedrive de ${nombre}:\n${JSON.stringify(data)}` }],
+  };
+  // Sin pensamiento extendido: el resumen es redacción, y así no consume el límite ni tarda minutos.
+  // Si el modelo no admite desactivarlo, se reintenta sin el parámetro.
+  let res;
+  try {
+    res = await claude.messages.create({ ...params, thinking: { type: 'disabled' } });
+  } catch (e) {
+    if (!/thinking/i.test((e as Error).message)) throw e;
+    res = await claude.messages.create(params);
+  }
   const text = res.content
     .filter((b) => b.type === 'text')
     .map((b) => (b as { text: string }).text)
