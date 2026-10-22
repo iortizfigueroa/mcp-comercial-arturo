@@ -123,7 +123,7 @@ ${STYLE}`;
 
   const res = await claude.messages.create({
     model: MODEL,
-    max_tokens: 3000,
+    max_tokens: 16000,
     system,
     messages: [{ role: 'user', content: `Datos de Pipedrive de ${nombre}:\n${JSON.stringify(data)}` }],
   });
@@ -132,5 +132,10 @@ ${STYLE}`;
     .map((b) => (b as { text: string }).text)
     .join('\n')
     .trim();
-  return text || `${nombre}, no he podido generar el resumen de hoy.`;
+  if (!text) {
+    const tipos = res.content.map((b) => b.type).join(',') || 'nada';
+    console.error('resumen vacío', { stop_reason: res.stop_reason, tipos, usage: res.usage, leads: data.leads.length });
+    return `${nombre}, no he podido generar el resumen de hoy (motivo: ${res.stop_reason}; bloques: ${tipos}).`;
+  }
+  return text;
 }
