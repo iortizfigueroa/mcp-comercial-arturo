@@ -1,5 +1,6 @@
 // Resumen diario (9:30, todos los días) que se manda a cada grupo.
 // Se recogen los deals abiertos del comercial con su contexto y Claude escribe el resumen con el estilo de Nacho.
+import type Anthropic from '@anthropic-ai/sdk';
 import { claude, MODEL } from './claude.js';
 import type { ChatBinding } from './db.js';
 import * as pd from './pipedrive.js';
@@ -121,21 +122,15 @@ Cómo escribirlo:
 
 ${STYLE}`;
 
-  const params = {
+  // Los modelos nuevos piensan siempre (adaptive thinking) y el pensamiento cuenta dentro de max_tokens.
+  // effort 'low' reduce cuánto piensa; max_tokens con margen para que siempre quede sitio para el texto.
+  const res = await claude.messages.create({
     model: MODEL,
-    max_tokens: 8000,
+    max_tokens: 16000,
+    output_config: { effort: 'low' },
     system,
-    messages: [{ role: 'user' as const, content: `Datos de Pipedrive de ${nombre}:\n${JSON.stringify(data)}` }],
-  };
-  // Sin pensamiento extendido: el resumen es redacción, y así no consume el límite ni tarda minutos.
-  // Si el modelo no admite desactivarlo, se reintenta sin el parámetro.
-  let res;
-  try {
-    res = await claude.messages.create({ ...params, thinking: { type: 'disabled' } });
-  } catch (e) {
-    if (!/thinking/i.test((e as Error).message)) throw e;
-    res = await claude.messages.create(params);
-  }
+    messages: [{ role: 'user', content: `Datos de Pipedrive de ${nombre}:\n${JSON.stringify(data)}` }],
+  } as any) as Anthropic.Message;
   const text = res.content
     .filter((b) => b.type === 'text')
     .map((b) => (b as { text: string }).text)

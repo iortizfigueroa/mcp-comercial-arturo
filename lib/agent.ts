@@ -64,15 +64,15 @@ export async function runAgent(ctx: Ctx, userText: string): Promise<{ text: stri
   let text = '';
 
   for (let i = 0; i < 8; i++) {
-    const params = { model: MODEL, max_tokens: 3000, system, tools, messages };
-    // Sin pensamiento extendido: respuestas cortas y rápidas; si el modelo no lo admite, se reintenta sin el parámetro
-    let res: Anthropic.Message;
-    try {
-      res = await client.messages.create({ ...params, thinking: { type: 'disabled' } });
-    } catch (e) {
-      if (!/thinking/i.test((e as Error).message)) throw e;
-      res = await client.messages.create(params);
-    }
+    // Pensamiento al mínimo (effort low) y margen de tokens: el pensamiento cuenta dentro de max_tokens
+    const res = (await client.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      output_config: { effort: 'low' },
+      system,
+      tools,
+      messages,
+    } as any)) as Anthropic.Message;
     messages.push({ role: 'assistant', content: res.content });
     const textNow = res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
