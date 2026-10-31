@@ -52,6 +52,9 @@ Escríbele al bot en privado `/miid`. Pon ese número en `ADMIN_TELEGRAM_IDS` y 
 2. En el grupo escribe `/vincular arturo`. Si hay varios usuarios con ese nombre, te da los ids para `/vincular id:123`.
 3. Prueba: el comercial escribe "qué tareas tengo hoy".
 
+## Notas de voz
+El comercial puede mandar audios. El bot los transcribe (ElevenLabs con `ELEVENLABS_API_KEY` u OpenAI Whisper con `OPENAI_API_KEY`), enseña lo que ha entendido (🎤 «…») y lo trata como un mensaje escrito. Sin ninguna de las dos claves, contesta que no entiende audios.
+
 ## Comandos
 - `/resumen` – resumen de hoy
 - `/olvidar` – borra el contexto de la conversación (el registro se mantiene)

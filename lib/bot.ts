@@ -6,6 +6,7 @@ import * as pd from './pipedrive.js';
 import { buildSummary } from './summary.js';
 import { getBotUsername, send, sendRich, tg, typing } from './telegram.js';
 import { executeWrite, type Ctx } from './tools.js';
+import { sttEnabled, transcribe } from './stt.js';
 
 const HELP = `Soy el asistente de Pipedrive. Escríbeme normal, por ejemplo:
 - qué tareas tengo hoy
@@ -30,11 +31,34 @@ export async function handleUpdate(update: any): Promise<void> {
   if (!msg) return;
   if (msg.migrate_to_chat_id) return db.migrateChat(msg.chat.id, msg.migrate_to_chat_id);
 
-  const text: string | undefined = msg.text ?? msg.caption;
+  let text: string | undefined = msg.text ?? msg.caption;
   const from = msg.from;
-  if (!text || !from || from.is_bot) return;
-
+  if (!from || from.is_bot) return;
   const chatId: number = msg.chat.id;
+
+  // ---------- Notas de voz / audios ----------
+  const audio = msg.voice ?? msg.audio ?? msg.video_note;
+  if (!text && audio) {
+    if (!sttEnabled()) {
+      await send(chatId, 'Todavía no entiendo audios. Escríbemelo, por favor.');
+      return;
+    }
+    await typing(chatId);
+    try {
+      text = await transcribe(audio.file_id, audio.mime_type ?? 'audio/ogg');
+    } catch (e) {
+      console.error('transcripción', e);
+      await send(chatId, `⚠️ No he podido entender el audio: ${(e as Error).message}`);
+      return;
+    }
+    if (!text) {
+      await send(chatId, 'No he entendido nada en el audio. ¿Me lo repites?');
+      return;
+    }
+    await send(chatId, `🎤 «${text}»`);
+  }
+  if (!text) return;
+
   const isGroup = msg.chat.type === 'group' || msg.chat.type === 'supergroup';
   const admin = isAdmin(from.id);
   const botName = await getBotUsername();
