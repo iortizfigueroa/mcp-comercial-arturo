@@ -196,3 +196,11 @@ export async function claimSummary(chatId: number, day: string): Promise<boolean
 export async function releaseSummary(chatId: number, day: string): Promise<void> {
   await q`DELETE FROM summary_sent WHERE chat_id = ${chatId} AND day = ${day}::date`;
 }
+
+/** Mensajes enviados al bot en un día (fecha de Madrid), con hora local. */
+export async function userMessagesListForDay(chatId: number, day: string): Promise<Row[]> {
+  return q`SELECT content, tg_user_id, to_char(created_at AT TIME ZONE 'Europe/Madrid', 'HH24:MI') AS hora
+    FROM messages
+    WHERE chat_id = ${chatId} AND role = 'user' AND (created_at AT TIME ZONE 'Europe/Madrid')::date = ${day}::date
+    ORDER BY id`;
+}

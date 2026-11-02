@@ -55,6 +55,9 @@ Escríbele al bot en privado `/miid`. Pon ese número en `ADMIN_TELEGRAM_IDS` y 
 ## Notas de voz
 El comercial puede mandar audios. El bot los transcribe (ElevenLabs con `ELEVENLABS_API_KEY` u OpenAI Whisper con `OPENAI_API_KEY`), enseña lo que ha entendido (🎤 «…») y lo trata como un mensaje escrito. Sin ninguna de las dos claves, contesta que no entiende audios.
 
+## Informe de uso para Nacho
+Cada día a las 9:30 llega por privado a cada admin (`ADMIN_TELEGRAM_IDS`) un informe del día anterior: por comercial, cuántos mensajes mandó al bot (grupo y privado), qué pidió y qué cambios hizo en Pipedrive; al final, quién no lo usó. A demanda: `/informe` (hoy) o `/informe ayer`, solo admin.
+
 ## Comandos
 - `/resumen` – resumen de hoy
 - `/olvidar` – borra el contexto de la conversación (el registro se mantiene)

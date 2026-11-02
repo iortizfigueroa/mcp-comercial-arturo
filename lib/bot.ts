@@ -7,6 +7,8 @@ import { buildSummary } from './summary.js';
 import { getBotUsername, send, sendRich, tg, typing } from './telegram.js';
 import { executeWrite, type Ctx } from './tools.js';
 import { sttEnabled, transcribe } from './stt.js';
+import { buildUsageReport } from './report.js';
+import { addDays, todayMadrid } from './time.js';
 
 const HELP = `Soy el asistente de Pipedrive. Escríbeme normal, por ejemplo:
 - qué tareas tengo hoy
@@ -233,6 +235,20 @@ async function handleCommand(
       await db.unbindChat(c.chatId);
       await send(c.chatId, 'Grupo desvinculado.');
       return;
+
+    case 'informe': {
+      if (!c.admin) return;
+      const ayer = /ayer/i.test(arg);
+      const day = ayer ? addDays(todayMadrid(), -1) : todayMadrid();
+      try {
+        // Siempre por privado, aunque se pida desde un grupo
+        await sendRich(c.fromId, await buildUsageReport(day));
+        if (c.isGroup) await send(c.chatId, 'Te lo he mandado por privado.');
+      } catch (e) {
+        await send(c.chatId, `⚠️ No he podido hacer el informe: ${(e as Error).message}`);
+      }
+      return;
+    }
 
     case 'resumen': {
       const binding = c.isGroup ? await db.getChat(c.chatId) : await db.getChatByComercial(c.fromId);
