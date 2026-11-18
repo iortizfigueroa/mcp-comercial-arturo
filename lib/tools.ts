@@ -465,7 +465,7 @@ const WRITE: Record<string, WriteTool> = {
     def: () => ({
       name: 'crear_lead',
       description:
-        'Propone dar de alta un lead nuevo del comercial en Pipedrive (embudo Single Leads): crea la organización (clínica/centro), la persona de contacto y el deal a su nombre. Antes comprueba que no exista ya. Pide como mínimo el nombre de la clínica o de la persona y un teléfono o email; el resto solo si lo ha dicho.',
+        'Propone dar de alta un lead nuevo del comercial en Pipedrive (embudo Single Leads): crea la organización (clínica/centro), la persona de contacto y el deal a su nombre. Antes comprueba que no exista ya. Obligatorio solo el nombre de la clínica o de la persona. Teléfono y email son opcionales, pero pídeselos antes si no los ha dado; el resto solo si lo ha dicho.',
       input_schema: {
         type: 'object',
         properties: {
@@ -502,7 +502,6 @@ const WRITE: Record<string, WriteTool> = {
       const telefono = str(input.telefono, 40);
       const email = str(input.email, 150)?.toLowerCase();
       if (!clinica && !contacto) throw new Error('Falta el nombre de la clínica o de la persona de contacto');
-      if (!telefono && !email) throw new Error('Falta un teléfono o un email del lead');
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`El email «${email}» no parece válido`);
       const etapa = [42, 38, 43, 44].includes(Number(input.etapa_id)) ? Number(input.etapa_id) : 42;
 
@@ -523,6 +522,7 @@ const WRITE: Record<string, WriteTool> = {
         email,
         [str(input.ciudad, 80), str(input.pais, 40)].filter(Boolean).join(', ') || null,
         input.origen ? `origen: ${ORIGEN_LABEL[input.origen as string] ?? input.origen}` : null,
+        !telefono && !email ? 'sin teléfono ni email' : !telefono ? 'sin teléfono' : !email ? 'sin email' : null,
       ].filter(Boolean);
       return {
         summary: `Nuevo lead en Single Leads: «${titulo}» · ${name(etapa)}${datos.length ? `\n${datos.join(' · ')}` : ''}${input.nota ? `\nNota: ${String(input.nota).slice(0, 200)}` : ''}`,
