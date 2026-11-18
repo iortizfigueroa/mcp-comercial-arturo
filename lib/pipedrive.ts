@@ -94,3 +94,33 @@ export const updateActivity = async (id: number, body: Record<string, unknown>) 
 export const dealNotes = async (dealId: number, limit = 5) =>
   (await pd('GET', '/notes', { deal_id: dealId, limit, sort: 'add_time DESC' })).data ?? [];
 export const createNote = async (body: Record<string, unknown>) => (await pd('POST', '/notes', {}, body)).data;
+
+// ---------- Alta de leads (organización + persona + deal) ----------
+/** Búsqueda en Pipedrive (todas las personas/organizaciones/deals, de cualquier propietario). */
+export async function search(
+  entity: 'persons' | 'organizations' | 'deals',
+  term: string,
+  opts: { fields?: string; exact?: boolean } = {},
+): Promise<any[]> {
+  if (term.trim().length < 2) return [];
+  const j = await pd('GET', `/${entity}/search`, {
+    term: term.trim(),
+    fields: opts.fields,
+    exact_match: opts.exact ? true : undefined,
+    limit: 10,
+  });
+  return (j.data?.items ?? []).map((i: any) => i.item);
+}
+
+export const createOrg = async (body: Record<string, unknown>) => (await pd('POST', '/organizations', {}, body)).data;
+export const createPerson = async (body: Record<string, unknown>) => (await pd('POST', '/persons', {}, body)).data;
+export const createDeal = async (body: Record<string, unknown>) => (await pd('POST', '/deals', {}, body)).data;
+
+let orgFieldsCache: { at: number; fields: any[] } | undefined;
+/** Opciones de un campo de organización (para resolver p. ej. el País por su nombre). Caché 1 h. */
+export async function orgFieldOptions(key: string): Promise<{ id: number; label: string }[]> {
+  if (!orgFieldsCache || Date.now() - orgFieldsCache.at > 3600_000) {
+    orgFieldsCache = { at: Date.now(), fields: await pdAll('/organizationFields', {}, 1000) };
+  }
+  return orgFieldsCache.fields.find((f) => f.key === key)?.options ?? [];
+}

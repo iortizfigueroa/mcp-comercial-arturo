@@ -52,6 +52,9 @@ Escríbele al bot en privado `/miid`. Pon ese número en `ADMIN_TELEGRAM_IDS` y 
 2. En el grupo escribe `/vincular arturo`. Si hay varios usuarios con ese nombre, te da los ids para `/vincular id:123`.
 3. Prueba: el comercial escribe "qué tareas tengo hoy".
 
+## Alta de leads
+El comercial puede dar de alta un lead nuevo ("nuevo lead: Clínica Aurora en Sevilla, contacto Laura, 600 123 456, viene de Instagram"). El bot comprueba que no exista ya (mismo teléfono, email, organización o deal con el mismo nombre, de cualquier comercial) y, tras el botón de confirmar, crea organización + persona + deal en Single Leads (etapa 42 por defecto) a nombre del comercial, con Ciudad, Origen del contacto, Comercial asignado y, si los dice, los campos de "1er contacto". Si ya existe y es de otro comercial, no lo crea ni dice de quién es.
+
 ## Notas de voz
 El comercial puede mandar audios. El bot los transcribe (ElevenLabs con `ELEVENLABS_API_KEY` u OpenAI Whisper con `OPENAI_API_KEY`), enseña lo que ha entendido (🎤 «…») y lo trata como un mensaje escrito. Sin ninguna de las dos claves, contesta que no entiende audios.
 

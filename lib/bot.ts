@@ -16,6 +16,7 @@ const HELP = `Soy el asistente de Pipedrive. Escríbeme normal, por ejemplo:
 - he llamado a Dermasalud, quieren demo; ponme visita el jueves a las 11
 - qué deals no tienen próxima tarea
 - marca como perdida la de Estética Luna, se van con otro proveedor
+- nuevo lead: Clínica Aurora en Sevilla, contacto Laura, 600 123 456, viene de Instagram
 
 Antes de cambiar nada te pediré confirmación con un botón.
 Comandos: /resumen (resumen de hoy), /olvidar (empezar conversación de cero), /ayuda`;

@@ -191,6 +191,89 @@ const READ: Record<string, { def: Anthropic.Tool; run: ReadHandler }> = {
   },
 };
 
+
+// ---------- Alta de leads: configuración de Pipedrive (leaseir.pipedrive.com) ----------
+const PIPELINE_SINGLE_LEADS = 5;
+const F = {
+  orgCiudad: '2588ebf2635f92b75a7291b208536961ebece135',
+  orgProvincia: 'e69e43abad2a72c755cd1e4dda98f97bed4258cc',
+  orgOrigen: 'b8d3ba16764fb7b5da8e6ad1576e79c150ccbcb6',
+  orgComercial: 'e9a50d55834a0fe97eba6f1c7e0e7fbffdb9e8d8',
+  orgPais: 'e4d411634d14026c59658bfb3c61503778ebc9cc',
+  orgTipoCuenta: '940deb6059d9a0d7a8bacd53247a37d2e1b815de',
+  orgTelefono: 'fd7c6cc2ef2b810e84b20daf21b63380345ab08b',
+  orgEmail: 'b984255b9589467521790f10cc4bff189cda3913',
+  dealTieneCentro: '862b7eaa6ac5d37209038d9a8f5949fcac13e070',
+  dealNumCentros: '5e8effe65bdb68e814e3ca7b88bb8cb49c1569ca',
+  dealTecnologia: '9b82c50c4340a555ca5dff9fa2ba985e4d7be4c4',
+};
+const ORIGEN_ID: Record<string, number> = {
+  busqueda_propia: 66, referencia: 67, redes_sociales: 68, web_telefono: 69, otros: 73, distribuidor: 158,
+};
+const ORIGEN_LABEL: Record<string, string> = {
+  busqueda_propia: 'búsqueda propia', referencia: 'referencia', redes_sociales: 'redes sociales',
+  web_telefono: 'web/teléfono', otros: 'otros', distribuidor: 'distribuidor',
+};
+const TIENE_CENTRO_ID: Record<string, number> = { si: 168, lo_va_a_montar: 169, no: 170 };
+const TECNO_ID: Record<string, number> = {
+  diodo: 171, alejandrita: 172, ipl: 173, shr: 174, ndyag: 175, cera_hilo_otros: 176, ninguna: 177,
+};
+const COMERCIAL_OPCIONES: [string, number][] = [
+  ['david', 27], ['francisco', 28], ['oliver', 29], ['carlo', 30], ['janna', 31], ['maria martire', 32],
+  ['arturo', 33], ['ignacio', 34], ['malak', 152], ['iñigo', 153],
+];
+
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const str = (v: unknown, max: number) => {
+  const t = typeof v === 'string' ? v.trim() : '';
+  return t ? t.slice(0, max) : undefined;
+};
+const digits = (s: string) => s.replace(/\D/g, '');
+function comercialAsignado(pdUserName: string): number | undefined {
+  const n = norm(pdUserName);
+  return COMERCIAL_OPCIONES.find(([k]) => n.startsWith(norm(k)))?.[1];
+}
+
+/** Busca si el lead ya existe (por teléfono, email, organización o deal con el mismo nombre). */
+async function findDuplicate(l: { clinica?: string; contacto?: string; telefono?: string; email?: string }): Promise<
+  { motivo: string; ownerId?: number; label: string; dealId?: number } | null
+> {
+  const checks: Promise<{ motivo: string; ownerId?: number; label: string; dealId?: number } | null>[] = [];
+  if (l.email) {
+    checks.push(
+      pd.search('persons', l.email, { fields: 'email', exact: true }).then((r) =>
+        r[0] ? { motivo: 'mismo email', ownerId: Number(r[0].owner?.id), label: r[0].name } : null,
+      ),
+    );
+  }
+  if (l.telefono && digits(l.telefono).length >= 6) {
+    const tail = digits(l.telefono).slice(-9);
+    checks.push(
+      pd.search('persons', tail, { fields: 'phone' }).then((r) => {
+        const hit = r.find((p: any) => (p.phones ?? []).some((ph: string) => digits(String(ph)).endsWith(tail)));
+        return hit ? { motivo: 'mismo teléfono', ownerId: Number(hit.owner?.id), label: hit.name } : null;
+      }),
+    );
+  }
+  const nombre = l.clinica ?? l.contacto;
+  if (nombre) {
+    checks.push(
+      pd.search('deals', nombre, { fields: 'title', exact: true }).then((r) =>
+        r[0] ? { motivo: 'deal con el mismo nombre', ownerId: Number(r[0].owner?.id), label: r[0].title, dealId: r[0].id } : null,
+      ),
+    );
+  }
+  if (l.clinica) {
+    checks.push(
+      pd.search('organizations', l.clinica, { fields: 'name', exact: true }).then((r) =>
+        r[0] ? { motivo: 'organización con el mismo nombre', ownerId: Number(r[0].owner?.id), label: r[0].name } : null,
+      ),
+    );
+  }
+  const res = await Promise.all(checks);
+  return res.find(Boolean) ?? null;
+}
+
 // ---------- Escritura (proponer -> botón ✅ -> ejecutar) ----------
 interface WriteTool {
   def: (types: any[]) => Anthropic.Tool;
@@ -375,6 +458,141 @@ const WRITE: Record<string, WriteTool> = {
       const when = input.hora ? madridToUtc(input.fecha, input.hora) : { due_date: input.fecha, due_time: '' };
       await pd.updateActivity(input.activity_id, when);
       return 'Tarea reprogramada';
+    },
+  },
+
+  crear_lead: {
+    def: () => ({
+      name: 'crear_lead',
+      description:
+        'Propone dar de alta un lead nuevo del comercial en Pipedrive (embudo Single Leads): crea la organización (clínica/centro), la persona de contacto y el deal a su nombre. Antes comprueba que no exista ya. Pide como mínimo el nombre de la clínica o de la persona y un teléfono o email; el resto solo si lo ha dicho.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          clinica: { type: 'string', description: 'Nombre de la clínica / centro / empresa (si lo hay)' },
+          contacto: { type: 'string', description: 'Nombre de la persona de contacto' },
+          telefono: { type: 'string' },
+          email: { type: 'string' },
+          ciudad: { type: 'string' },
+          provincia: { type: 'string' },
+          pais: { type: 'string', description: 'País, si lo dice (p. ej. España, Italia, Mexico)' },
+          origen: {
+            type: 'string',
+            enum: ['redes_sociales', 'web_telefono', 'busqueda_propia', 'referencia', 'distribuidor', 'otros'],
+            description: 'Cómo llegó el lead, solo si lo dice o es evidente',
+          },
+          tiene_centro: { type: 'string', enum: ['si', 'lo_va_a_montar', 'no'] },
+          num_centros: { type: 'number' },
+          tecnologia_actual: {
+            type: 'array',
+            items: { type: 'string', enum: ['diodo', 'alejandrita', 'ipl', 'shr', 'ndyag', 'cera_hilo_otros', 'ninguna'] },
+          },
+          etapa_id: {
+            type: 'integer',
+            enum: [42, 38, 43, 44],
+            description: '42 Lead interesado sin contactar (por defecto), 38 Escrito varios emails, 43 Lead cualificado, 44 Demo / negociación',
+          },
+          nota: { type: 'string', description: 'Contexto del lead: qué quiere, de dónde viene, qué se habló' },
+        },
+      },
+    }),
+    propose: async (input, ctx) => {
+      const clinica = str(input.clinica, 150);
+      const contacto = str(input.contacto, 120);
+      const telefono = str(input.telefono, 40);
+      const email = str(input.email, 150)?.toLowerCase();
+      if (!clinica && !contacto) throw new Error('Falta el nombre de la clínica o de la persona de contacto');
+      if (!telefono && !email) throw new Error('Falta un teléfono o un email del lead');
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`El email «${email}» no parece válido`);
+      const etapa = [42, 38, 43, 44].includes(Number(input.etapa_id)) ? Number(input.etapa_id) : 42;
+
+      // ¿Ya existe? Teléfono, email, organización o deal con el mismo nombre (de cualquier comercial)
+      const dup = await findDuplicate({ clinica, contacto, telefono, email });
+      if (dup) {
+        if (dup.ownerId === ctx.pdUserId) {
+          throw new Error(`Ya tienes este lead en Pipedrive: ${dup.label}${dup.dealId ? ` (${pd.dealUrl(dup.dealId)})` : ''}. No creo otro.`);
+        }
+        throw new Error(`Ya existe en Pipedrive un contacto igual (${dup.motivo}) y lo lleva otro comercial. No lo creo; que lo revise Nacho.`);
+      }
+
+      const titulo = clinica ?? contacto!;
+      const name = await stageNamer();
+      const datos = [
+        contacto && clinica ? `contacto ${contacto}` : null,
+        telefono ? `tel. ${telefono}` : null,
+        email,
+        [str(input.ciudad, 80), str(input.pais, 40)].filter(Boolean).join(', ') || null,
+        input.origen ? `origen: ${ORIGEN_LABEL[input.origen as string] ?? input.origen}` : null,
+      ].filter(Boolean);
+      return {
+        summary: `Nuevo lead en Single Leads: «${titulo}» · ${name(etapa)}${datos.length ? `\n${datos.join(' · ')}` : ''}${input.nota ? `\nNota: ${String(input.nota).slice(0, 200)}` : ''}`,
+        input: {
+          clinica,
+          contacto,
+          telefono,
+          email,
+          ciudad: str(input.ciudad, 80),
+          provincia: str(input.provincia, 80),
+          pais: str(input.pais, 40),
+          origen: ORIGEN_ID[input.origen as string] ?? null,
+          tiene_centro: TIENE_CENTRO_ID[input.tiene_centro as string] ?? null,
+          num_centros: Number.isFinite(Number(input.num_centros)) && Number(input.num_centros) > 0 ? Number(input.num_centros) : null,
+          tecnologia: Array.isArray(input.tecnologia_actual)
+            ? input.tecnologia_actual.map((t: string) => TECNO_ID[t]).filter(Boolean)
+            : [],
+          etapa,
+          nota: str(input.nota, 4000),
+        },
+      };
+    },
+    execute: async (input, ctx) => {
+      // Segunda comprobación por si alguien lo ha creado entre la propuesta y el botón
+      const dup = await findDuplicate(input);
+      if (dup) throw new Error(`Ya existe en Pipedrive (${dup.motivo}); no lo creo dos veces.`);
+
+      let orgId: number | undefined;
+      if (input.clinica) {
+        const orgBody: Record<string, unknown> = { name: input.clinica, owner_id: ctx.pdUserId };
+        if (input.ciudad) orgBody[F.orgCiudad] = input.ciudad;
+        if (input.provincia) orgBody[F.orgProvincia] = input.provincia;
+        if (input.origen) orgBody[F.orgOrigen] = String(input.origen);
+        if (input.telefono) orgBody[F.orgTelefono] = input.telefono;
+        if (input.email) orgBody[F.orgEmail] = input.email;
+        orgBody[F.orgTipoCuenta] = '98'; // Clinica
+        const comercial = comercialAsignado(ctx.pdUserName);
+        if (comercial) orgBody[F.orgComercial] = comercial;
+        if (input.pais) {
+          const p = (await pd.orgFieldOptions(F.orgPais).catch(() => [])).find((o) => norm(o.label) === norm(input.pais));
+          if (p) orgBody[F.orgPais] = p.id;
+        }
+        orgId = (await pd.createOrg(orgBody))?.id;
+      }
+
+      const person = await pd.createPerson({
+        name: input.contacto ?? input.clinica,
+        owner_id: ctx.pdUserId,
+        ...(orgId ? { org_id: orgId } : {}),
+        ...(input.telefono ? { phone: [{ value: input.telefono, primary: true, label: 'work' }] } : {}),
+        ...(input.email ? { email: [{ value: input.email, primary: true, label: 'work' }] } : {}),
+      });
+
+      const dealBody: Record<string, unknown> = {
+        title: input.clinica ?? input.contacto,
+        pipeline_id: PIPELINE_SINGLE_LEADS,
+        stage_id: input.etapa,
+        user_id: ctx.pdUserId,
+        person_id: person?.id,
+        ...(orgId ? { org_id: orgId } : {}),
+      };
+      if (input.tiene_centro) dealBody[F.dealTieneCentro] = input.tiene_centro;
+      if (input.num_centros) dealBody[F.dealNumCentros] = input.num_centros;
+      if (input.tecnologia?.length) dealBody[F.dealTecnologia] = input.tecnologia.join(',');
+      const deal = await pd.createDeal(dealBody);
+
+      if (input.nota && deal?.id) {
+        await pd.createNote({ deal_id: deal.id, content: `${input.nota}\n\n— ${ctx.pdUserName} (vía bot de Telegram)` });
+      }
+      return `Lead creado: ${pd.dealUrl(deal?.id)}`;
     },
   },
 
